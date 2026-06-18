@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>محوّل الفواتير — PDF إلى Excel</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --green: #3fb950;
+      --blue: #58a6ff;
+      --red: #f85149;
+      --yellow: #d29922;
+      --font: 'IBM Plex Sans Arabic', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 1.5rem;
+    }
+    .app {
+      width: 100%;
+      max-width: 560px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .header { text-align: center; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      background: rgba(88,166,255,.08);
+      border: 1px solid rgba(88,166,255,.2);
+      border-radius: 100px;
+      padding: .35rem .9rem;
+      font-size: .8rem;
+      color: var(--blue);
+      margin-bottom: 1rem;
+    }
+    h1 {
+      font-size: clamp(1.6rem,4vw,2.2rem);
+      font-weight: 700;
+      letter-spacing: -.02em;
+      line-height: 1.2;
+    }
+    h1 span { color: var(--blue); }
+    .subtitle { color: var(--muted); margin-top: .6rem; font-size: .95rem; line-height: 1.6; }
+
+    /* Drop Zone */
+    .drop-zone {
+      background: var(--surface);
+      border: 2px dashed var(--border);
+      border-radius: 16px;
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      position: relative;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--blue);
+      background: rgba(88,166,255,.04);
+    }
+    .drop-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .drop-icon {
+      width: 56px; height: 56px;
+      background: rgba(88,166,255,.1);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 1rem;
+      color: var(--blue);
+    }
+    .drop-title { font-size: 1.05rem; font-weight: 600; margin-bottom: .4rem; }
+    .drop-sub { font-size: .85rem; color: var(--muted); }
+    .file-info {
+      display: none;
+      align-items: center;
+      gap: .75rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: .75rem 1rem;
+      margin-top: 1rem;
+    }
+    .file-info.show { display: flex; }
+    .file-icon { color: var(--red); font-size: 1.4rem; }
+    .file-name { font-size: .9rem; font-weight: 500; flex: 1; word-break: break-all; }
+    .file-size { font-size: .8rem; color: var(--muted); flex-shrink: 0; }
+
+    /* Button */
+    .btn-convert {
+      width: 100%;
+      padding: .875rem;
+      background: var(--blue);
+      color: #0d1117;
+      border: none;
+      border-radius: 10px;
+      font-family: var(--font);
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .15s, transform .1s;
+      display: flex; align-items: center; justify-content: center; gap: .6rem;
+    }
+    .btn-convert:hover { background: #79b8ff; }
+    .btn-convert:active { transform: scale(.98); }
+    .btn-convert:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* Progress */
+    .progress-wrap {
+      display: none;
+      flex-direction: column;
+      gap: .6rem;
+    }
+    .progress-wrap.show { display: flex; }
+    .progress-bar-bg {
+      background: var(--surface2);
+      border-radius: 100px;
+      height: 6px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: var(--blue);
+      border-radius: 100px;
+      width: 0%;
+      transition: width .3s;
+    }
+    .progress-label { font-size: .85rem; color: var(--muted); text-align: center; }
+
+    /* Result */
+    .result-card {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      gap: 1rem;
+      flex-direction: column;
+    }
+    .result-card.show { display: flex; }
+    .result-card.success { border-color: rgba(63,185,80,.35); }
+    .result-card.error   { border-color: rgba(248,81,73,.35); }
+
+    .result-header { display: flex; align-items: center; gap: .75rem; }
+    .result-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem; flex-shrink: 0;
+    }
+    .result-icon.ok  { background: rgba(63,185,80,.12); }
+    .result-icon.err { background: rgba(248,81,73,.12); }
+    .result-title { font-weight: 600; font-size: 1rem; }
+    .result-sub { font-size: .85rem; color: var(--muted); }
+
+    .btn-download {
+      display: flex; align-items: center; justify-content: center; gap: .5rem;
+      padding: .7rem 1.2rem;
+      background: rgba(63,185,80,.12);
+      color: var(--green);
+      border: 1px solid rgba(63,185,80,.25);
+      border-radius: 8px;
+      font-family: var(--font);
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background .15s;
+    }
+    .btn-download:hover { background: rgba(63,185,80,.2); }
+
+    .btn-reset {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 8px;
+      padding: .6rem 1rem;
+      font-family: var(--font);
+      font-size: .85rem;
+      cursor: pointer;
+      transition: color .15s, border-color .15s;
+    }
+    .btn-reset:hover { color: var(--text); border-color: var(--text); }
+
+    .steps {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: .75rem;
+    }
+    .step { display: flex; align-items: flex-start; gap: .75rem; font-size: .875rem; }
+    .step-num {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: rgba(88,166,255,.1);
+      color: var(--blue);
+      font-size: .75rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: .05rem;
+    }
+    .step-text { color: var(--muted); line-height: 1.5; }
+    .step-text strong { color: var(--text); }
+
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(13,17,23,.3);
+      border-top-color: #0d1117;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <div class="badge">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path d="M14 2v6h6"/></svg>
+      محوّل الفواتير
+    </div>
+    <h1>PDF → <span>Excel</span></h1>
+    <p class="subtitle">استخرج بيانات الفواتير العربية من PDF<br>وحوّلها لملف Excel منسّق في ثوانٍ</p>
+  </div>
+
+  <!-- Drop Zone -->
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".pdf" />
+    <div class="drop-icon">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    </div>
+    <div class="drop-title">اسحب ملف PDF هنا</div>
+    <div class="drop-sub">أو اضغط للاختيار • حجم أقصى 50MB</div>
+    <div class="file-info" id="fileInfo">
+      <span class="file-icon">📄</span>
+      <span class="file-name" id="fileName">—</span>
+      <span class="file-size" id="fileSize">—</span>
+    </div>
+  </div>
+
+  <!-- Convert Button -->
+  <button class="btn-convert" id="convertBtn" onclick="startConvert()" disabled>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    تحويل إلى Excel
+  </button>
+
+  <!-- Progress -->
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="progress-label" id="progressLabel">جاري معالجة الملف...</div>
+  </div>
+
+  <!-- Result Card -->
+  <div class="result-card" id="resultCard">
+    <div class="result-header">
+      <div class="result-icon" id="resultIcon"></div>
+      <div>
+        <div class="result-title" id="resultTitle"></div>
+        <div class="result-sub"   id="resultSub"></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap">
+      <a class="btn-download" id="downloadLink" style="display:none">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        تنزيل Excel
+      </a>
+      <button class="btn-reset" onclick="resetForm()">تحويل ملف آخر</button>
+    </div>
+  </div>
+
+  <!-- Steps -->
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-text"><strong>ارفع ملف PDF</strong> — يحتوي على فواتير من المتجر</div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-text"><strong>اضغط تحويل</strong> — سيتم استخراج كل الفواتير تلقائياً</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-text"><strong>نزّل الملف</strong> — Excel منسّق مع دمج خلايا وألوان</div></div>
+  </div>
+
+</div>
+
+<script>
+  let selectedFile = null;
+  let downloadUrl  = null;
+
+  const dropZone   = document.getElementById("dropZone");
+  const fileInput  = document.getElementById("fileInput");
+  const fileInfo   = document.getElementById("fileInfo");
+  const convertBtn = document.getElementById("convertBtn");
+
+  fileInput.addEventListener("change", (e) => handleFile(e.target.files[0]));
+
+  dropZone.addEventListener("dragover",  (e) => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+  dropZone.addEventListener("dragleave", ()  => dropZone.classList.remove("drag-over"));
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("drag-over");
+    const f = e.dataTransfer.files[0];
+    if (f && f.type === "application/pdf") handleFile(f);
+  });
+
+  function handleFile(file) {
+    if (!file) return;
+    selectedFile = file;
+    document.getElementById("fileName").textContent = file.name;
+    document.getElementById("fileSize").textContent = formatSize(file.size);
+    fileInfo.classList.add("show");
+    convertBtn.disabled = false;
+    hideResult();
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  async function startConvert() {
+    if (!selectedFile) return;
+
+    convertBtn.disabled = true;
+    convertBtn.innerHTML = '<div class="spinner"></div> جاري التحويل...';
+
+    const progress = document.getElementById("progressWrap");
+    const bar      = document.getElementById("progressBar");
+    const label    = document.getElementById("progressLabel");
+    progress.classList.add("show");
+    hideResult();
+
+    // Fake progress animation
+    let pct = 0;
+    const steps = [
+      [20, "جاري قراءة الـ PDF..."],
+      [45, "استخراج بيانات الفواتير..."],
+      [70, "تحليل المنتجات والأسعار..."],
+      [88, "بناء ملف Excel..."],
+    ];
+    let si = 0;
+    const ticker = setInterval(() => {
+      if (si < steps.length) {
+        pct = steps[si][0];
+        label.textContent = steps[si][1];
+        bar.style.width = pct + "%";
+        si++;
+      }
+    }, 700);
+
+    const fd = new FormData();
+    fd.append("pdf", selectedFile);
+
+    try {
+      const res = await fetch("/convert", { method: "POST", body: fd });
+      clearInterval(ticker);
+      bar.style.width = "100%";
+      label.textContent = "اكتمل!";
+
+      if (res.ok) {
+        const blob = await res.blob();
+        downloadUrl = URL.createObjectURL(blob);
+        showSuccess(downloadUrl);
+      } else {
+        const data = await res.json();
+        showError(data.error || "حدث خطأ غير متوقع");
+      }
+    } catch (err) {
+      clearInterval(ticker);
+      showError("تعذّر الاتصال بالسيرفر: " + err.message);
+    }
+
+    setTimeout(() => progress.classList.remove("show"), 1500);
+    convertBtn.disabled = false;
+    convertBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> تحويل إلى Excel';
+  }
+
+  function showSuccess(url) {
+    const card  = document.getElementById("resultCard");
+    const icon  = document.getElementById("resultIcon");
+    const title = document.getElementById("resultTitle");
+    const sub   = document.getElementById("resultSub");
+    const link  = document.getElementById("downloadLink");
+
+    card.className  = "result-card show success";
+    icon.className  = "result-icon ok";
+    icon.textContent = "✅";
+    title.textContent = "تم التحويل بنجاح!";
+    sub.textContent   = "ملف Excel جاهز للتنزيل";
+    link.href         = url;
+    link.download     = "invoices_output.xlsx";
+    link.style.display = "flex";
+  }
+
+  function showError(msg) {
+    const card  = document.getElementById("resultCard");
+    const icon  = document.getElementById("resultIcon");
+    const title = document.getElementById("resultTitle");
+    const sub   = document.getElementById("resultSub");
+    document.getElementById("downloadLink").style.display = "none";
+
+    card.className   = "result-card show error";
+    icon.className   = "result-icon err";
+    icon.textContent = "❌";
+    title.textContent = "فشل التحويل";
+    sub.textContent   = msg;
+  }
+
+  function hideResult() {
+    document.getElementById("resultCard").className = "result-card";
+  }
+
+  function resetForm() {
+    selectedFile = null;
+    fileInput.value = "";
+    fileInfo.classList.remove("show");
+    convertBtn.disabled = true;
+    hideResult();
+    if (downloadUrl) { URL.revokeObjectURL(downloadUrl); downloadUrl = null; }
+  }
+</script>
+</body>
+</html>
